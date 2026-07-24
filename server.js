@@ -7,7 +7,7 @@ const path = require('path');
 const mysql = require('mysql2/promise');
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
