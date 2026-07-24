@@ -1,0 +1,23 @@
+{
+  "name": "rtp-local-backend",
+  "version": "1.0.0",
+  "description": "Local API server for the real-time pricing dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/server.test.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.19.0",
+    "jsonwebtoken": "^9.0.3",
+    "mysql2": "^3.4.2",
+    "nodemailer": "^7.0.1",
+    "socket.io": "^4.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
