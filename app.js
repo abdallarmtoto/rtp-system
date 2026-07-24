@@ -20,7 +20,10 @@ const state = {
   lastSyncTime: localStorage.getItem('lastSyncTime')
 };
 
-const socket = io('http://localhost:5000', {
+// Same-origin: works unchanged whether running locally
+// (http://localhost:5000) or deployed (e.g. Railway's given URL),
+// since the frontend is always served by the same server as the API.
+const socket = io(window.location.origin, {
   reconnection: true,
   reconnectionDelay: 1000,
   reconnectionDelayMax: 5000,
@@ -28,7 +31,7 @@ const socket = io('http://localhost:5000', {
 });
 
 // ======================== API HELPER ========================
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = window.location.origin + '/api';
 
 async function apiCall(endpoint, method = 'GET', body = null) {
   const options = {

@@ -16,16 +16,38 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
 // ======================== DATABASE CONFIG ========================
-const DB_CONFIG = {
-  host: 'localhost',
-  port: 3306,
-  user: 'root',
-  password: '',
-  database: 'rtp_system',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-};
+// Works locally (XAMPP defaults) and on Railway (which injects either
+// a single MYSQL_URL connection string, or separate MYSQLHOST/
+// MYSQLUSER/etc. variables, depending on how the MySQL service was
+// added to your project).
+function buildDbConfig() {
+  if (process.env.MYSQL_URL) {
+    const dbUrl = new URL(process.env.MYSQL_URL);
+    return {
+      host: dbUrl.hostname,
+      port: Number(dbUrl.port) || 3306,
+      user: decodeURIComponent(dbUrl.username),
+      password: decodeURIComponent(dbUrl.password),
+      database: dbUrl.pathname.replace(/^\//, ''),
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0
+    };
+  }
+
+  return {
+    host: process.env.DB_HOST || process.env.MYSQLHOST || 'localhost',
+    port: Number(process.env.DB_PORT || process.env.MYSQLPORT) || 3306,
+    user: process.env.DB_USER || process.env.MYSQLUSER || 'root',
+    password: process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || '',
+    database: process.env.DB_NAME || process.env.MYSQLDATABASE || 'rtp_system',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+  };
+}
+
+const DB_CONFIG = buildDbConfig();
 
 let pool;
 
