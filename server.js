@@ -9,7 +9,7 @@ const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+// nodemailer removed — replaced by Resend's HTTPS API (see EMAIL / PASSWORD RESET HELPERS below)
 
 const app = express();
 const server = http.createServer(app);
@@ -310,63 +310,58 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 // ======================== EMAIL / PASSWORD RESET HELPERS ========================
-// Real emails are sent through SMTP. Configure these in a .env file next to
-// server.js (see .env.example):
-//   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
-// For Gmail: SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_USER=you@gmail.com,
-// SMTP_PASS=<a 16-character Google "App Password", not your normal password>.
-const hasSmtpConfig = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+// Emails are sent through Resend's HTTPS API (https://resend.com) instead of
+// SMTP. This is deliberate: Railway (and many other free/trial hosts) block
+// outbound SMTP ports (25, 465, 587) entirely on free/trial/hobby plans —
+// only their paid Pro plan allows SMTP. An HTTPS API call is not affected by
+// that block, since it's just a normal web request, not an SMTP connection.
+//
+// Configure in your .env file (see .env.example):
+//   RESEND_API_KEY, RESEND_FROM
+// Get a free API key at https://resend.com (100 emails/day free, no card
+// required). RESEND_FROM can be onboarding@resend.dev for quick testing
+// without verifying your own domain.
+const hasResendConfig = Boolean(process.env.RESEND_API_KEY);
 
-let mailTransporter = null;
-if (hasSmtpConfig) {
-  const smtpPort = Number(process.env.SMTP_PORT) || 587;
-  const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
-
-  mailTransporter = nodemailer.createTransport({
-    service: process.env.SMTP_SERVICE || (process.env.SMTP_HOST?.includes('gmail') ? 'gmail' : undefined),
-    host: process.env.SMTP_HOST,
-    port: smtpPort,
-    secure: smtpSecure,
-    requireTLS: false,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-  });
-}
-
-// Checked once at startup so config mistakes are caught immediately instead
-// of silently failing the first time a user requests a reset.
 async function verifyMailTransporter() {
-  if (!mailTransporter) {
-    console.warn('⚠️  No SMTP settings found (SMTP_HOST/SMTP_USER/SMTP_PASS). Password reset emails will be logged to this console instead of sent. See .env.example.');
+  if (!hasResendConfig) {
+    console.warn('⚠️  No RESEND_API_KEY found. Password reset emails will be logged to this console instead of sent. See .env.example.');
     return;
   }
-
-  try {
-    await mailTransporter.verify();
-    console.log(`✅ Email is configured — password reset emails will be sent from ${process.env.SMTP_FROM || process.env.SMTP_USER}`);
-  } catch (err) {
-    console.error('❌ SMTP configuration error — emails will NOT send:', err.message);
-    console.error('   Double-check SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS in your .env file.');
-  }
+  console.log(`✅ Email is configured via Resend — password reset emails will be sent from ${process.env.RESEND_FROM || 'onboarding@resend.dev'}`);
 }
 
 async function sendResetEmail(toEmail, passwordToSend, username) {
-  if (!mailTransporter) {
+  if (!hasResendConfig) {
     console.log('\n📧 Password reminder requested for:', toEmail);
     console.log('🔐 Current password:', passwordToSend, '\n');
     return;
   }
 
   try {
-    await mailTransporter.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
-      to: toEmail,
-      subject: 'Your RTP System password reminder',
-      html: `<p>Hello ${username || 'there'},</p>
-             <p>Your temporary RTP System password is:</p>
-             <p><strong>${passwordToSend}</strong></p>
-             <p>You can sign in with this password now and change it later from your account settings.</p>
-             <p>If you did not request this, you can safely ignore this email.</p>`
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: process.env.RESEND_FROM || 'onboarding@resend.dev',
+        to: toEmail,
+        subject: 'Your RTP System password reminder',
+        html: `<p>Hello ${username || 'there'},</p>
+               <p>Your temporary RTP System password is:</p>
+               <p><strong>${passwordToSend}</strong></p>
+               <p>You can sign in with this password now and change it later from your account settings.</p>
+               <p>If you did not request this, you can safely ignore this email.</p>`
+      })
     });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`Resend API returned ${response.status}: ${errorBody}`);
+    }
+
     console.log(`✅ Password reminder email sent to ${toEmail}`);
   } catch (err) {
     console.error(`❌ Failed to send password reminder email to ${toEmail}:`, err.message);
